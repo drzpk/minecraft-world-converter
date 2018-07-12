@@ -23,7 +23,7 @@ object Logger {
         val width = 20
         val progressWidth = Math.floor(finished.toDouble() / total * width + 0.5).toInt()
         val progressStr = "#".repeat(progressWidth) + " ".repeat(width - progressWidth)
-        print("\t[$progressStr] $finished/$total, ${Math.floor(finished.toDouble() * 100 / total + 0.5)} $message")
+        print("\r[$progressStr] $finished/$total, ${Math.floor(finished.toDouble() * 100 / total + 0.5).toInt()}% $message")
     }
 
     /**
@@ -34,8 +34,7 @@ object Logger {
         print("[?] $message $choices")
 
         val scanner = Scanner(System.`in`)
-        val choice = scanner.next()
-        scanner.close()
+        val choice = scanner.nextLine()
 
         return when {
             choice.toLowerCase() == "y" -> true

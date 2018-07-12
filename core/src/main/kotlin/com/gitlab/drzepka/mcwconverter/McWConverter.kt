@@ -106,6 +106,7 @@ class McWConverter {
                 val oldDir = File(cmd.args[0])
                 val newDir = File(cmd.args[1])
                 compareWorlds(oldDir, newDir, output)
+                output.close()
             } else {
                 // Convert given world
                 if (cmd.args.size != 1) {

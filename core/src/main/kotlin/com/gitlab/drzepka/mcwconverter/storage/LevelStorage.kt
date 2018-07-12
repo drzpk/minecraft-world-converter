@@ -26,7 +26,8 @@ class LevelStorage(
     val seed: Long
         get() = rootTag.getTagValue("Data RandomSeed")!!
 
-    private val rootTag: CompoundTag
+    /** Main tag of thie level (level.dat). */
+    val rootTag: CompoundTag
 
     init {
         val levelFile = File(levelDirectory, "level.dat")
