@@ -1,0 +1,7 @@
+--------------------------
+|  Rename missing items  |
+--------------------------
+This section is similar to the "Rename existing items" section, but in this case below are listed only items
+that converter couldn't find in the newer world save. That's most likely because their registry names have changed
+significantly. You have to manually edit each entry in this section and type the correct new item name (on the right
+side).

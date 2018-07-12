@@ -1,0 +1,7 @@
+---------------------------
+|  Rename existing items  |
+---------------------------
+Actions below will update items in Forge registry in a world save. They work just like RenameBlock actions, so you
+should read documentation of the "Rename existing blocks" section.
+The action syntax is as follows:
+RenameItem <old block name> <old block id> -> <new block name> <new block id>

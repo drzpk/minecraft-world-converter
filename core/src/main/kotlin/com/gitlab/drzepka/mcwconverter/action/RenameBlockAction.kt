@@ -16,7 +16,7 @@ import com.gitlab.drzepka.mcwconverter.ResourceLocation
  * RenameBlock modid:blockName 433 -> modid:block_name 182
  * ```
  */
-class RenameBlockAction : BaseAction() {
+open class RenameBlockAction : BaseAction() {
 
     override val actionName = "RenameBlock"
     override val sortableStr: String

@@ -4,7 +4,9 @@ import com.flowpowered.nbt.CompoundTag
 import com.gitlab.drzepka.mcwconverter.Logger
 import com.gitlab.drzepka.mcwconverter.PrintableException
 import com.gitlab.drzepka.mcwconverter.ResourceLocation
+import com.gitlab.drzepka.mcwconverter.action.BaseAction
 import com.gitlab.drzepka.mcwconverter.action.RenameBlockAction
+import com.gitlab.drzepka.mcwconverter.action.RenameItemAction
 import com.gitlab.drzepka.mcwconverter.storage.LevelStorage
 import com.gitlab.drzepka.mcwconverter.storage.getTagValue
 import java.io.File
@@ -21,9 +23,6 @@ class LevelComparator(
 ) {
     private val oldLevel: LevelStorage
     private val newLevel: LevelStorage
-
-    private val renameBlockActions = ArrayList<RenameBlockAction>()
-    private val missingRenameBlockActions = ArrayList<RenameBlockAction>()
 
     private lateinit var logGenerator: LogGenerator
 
@@ -53,20 +52,23 @@ class LevelComparator(
      */
     fun compare(output: PrintWriter) {
         logGenerator = LogGenerator(output)
-        compareRegistryBlocks()
+        compareRegistry("blocks", true)
+        compareRegistry("items", false)
     }
 
-    private fun compareRegistryBlocks() {
-        val oldBlocks = oldLevel.rootTag.getTagValue<List<CompoundTag>>("FML Registries minecraft:blocks ids")!!
-        val newBlocks = newLevel.rootTag.getTagValue<List<CompoundTag>>("FML Registries minecraft:blocks ids")!!
+    private fun compareRegistry(what: String, blocks: Boolean) {
+        val oldList = oldLevel.rootTag.getTagValue<List<CompoundTag>>("FML Registries minecraft:$what ids")!!
+        val newList = newLevel.rootTag.getTagValue<List<CompoundTag>>("FML Registries minecraft:$what ids")!!
+        val renameActions = ArrayList<BaseAction>()
+        val missingRenameActions = ArrayList<BaseAction>()
 
-        for ((progress, oldBlock) in oldBlocks.withIndex()) {
-            Logger.progress(progress + 1, oldBlocks.size, "comparing registry blocks")
+        for ((progress, oldBlock) in oldList.withIndex()) {
+            Logger.progress(progress + 1, oldList.size, "comparing registry $what")
 
-            // Get block data
+            // Get block/item data
             val oldNameStr = oldBlock.value["K"]?.value as String? ?: ""
             if (oldNameStr.startsWith("minecraft:")) {
-                // Minecraft known what it's doing, don't touch its blocks
+                // Minecraft known what it's doing, don't touch its entries
                 continue
             }
 
@@ -74,44 +76,45 @@ class LevelComparator(
             val oldId = oldBlock.value["V"]?.value as Int? ?: 0
 
             var found = false
-            for (newBlock in newBlocks) {
+            for (newBlock in newList) {
                 val newName = newBlock.value["K"]?.value as String? ?: ""
                 if (newName.startsWith("minecraft:")) {
-                    // Minecraft known what it's doing, don't touch its blocks
+                    // Minecraft known what it's doing, don't touch its entries
                     continue
                 }
 
                 if (oldNameStr != newName && oldName.isSimilarTo(newName)) {
-                    // Block name has changed, but was found. Id will stay the same, there is no point
+                    // Block/item name has changed, but was found. Id will stay the same, there is no point
                     // in changing it (user can change it manually though).
-                    val action = RenameBlockAction()
+                    val action = if (blocks) RenameBlockAction() else RenameItemAction()
                     action.oldName = oldName
                     action.newName = ResourceLocation(newName)
                     action.oldId = oldId
                     action.newId = oldId
-                    renameBlockActions.add(action)
+                    renameActions.add(action)
 
                     found = true
                     break
                 } else if (oldNameStr == newName) {
-                    // Block was found and didn't change (well, at least its name)
+                    // Block/item was found and didn't change (well, at least its name)
                     found = true
                     break
                 }
             }
 
             if (!found) {
-                // Current block existed in an old save, but wasn't found in a new one
-                val action = RenameBlockAction()
+                // Current block/item existed in an old save, but wasn't found in a new one
+                val action = if (blocks) RenameBlockAction() else RenameItemAction()
                 action.oldName = oldName
                 action.newName = oldName
                 action.oldId = oldId
                 action.newId = oldId
-                missingRenameBlockActions.add(action)
+                missingRenameActions.add(action)
             }
         }
 
-        logGenerator.generateSection(renameBlockActions, "doc_rename_block.txt")
-        logGenerator.generateSection(missingRenameBlockActions, "doc_rename_block_missing.txt", true)
+        logGenerator.generateSection(renameActions, "doc_rename_$what.txt")
+        logGenerator.generateSection(missingRenameActions, "doc_rename_${what}_missing.txt", true)
+        println()
     }
 }
