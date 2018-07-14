@@ -12,18 +12,21 @@ class LogGenerator(private val writer: PrintWriter) {
     /**
      * Generates new log section.
      * @param actions list of actions to be included in this section
-     * @param headerName full name of the resource whose contents will serve as section header
+     * @param headerName full name of the resource whose contents will serve as section header. If `null` header
+     * name is given, new section won't be created.
      * @param commentOut whether to comment out each action from the list
      */
-    fun generateSection(actions: List<BaseAction>, headerName: String, commentOut: Boolean = false) {
+    fun generateSection(actions: List<BaseAction>, headerName: String?, commentOut: Boolean = false) {
         // Sort actions
         val sortedActions = actions.sortedBy { it.sortableStr }
 
-        val pack = javaClass.`package`.name.split(".").subList(0, 4).joinToString("/")
-        val reader = javaClass.getResourceAsStream("/$pack/$headerName")
-        writer.println()
-        writer.println()
-        reader.bufferedReader().forEachLine { writer.println("# $it") }
+        if (headerName != null) {
+            val pack = javaClass.`package`.name.split(".").subList(0, 4).joinToString("/")
+            val reader = javaClass.getResourceAsStream("/$pack/$headerName")
+            writer.println()
+            writer.println()
+            reader.bufferedReader().forEachLine { writer.println("# $it") }
+        }
         sortedActions.forEach { writer.println("${if (commentOut) "# " else ""}${it.actionName} $it") }
     }
 }

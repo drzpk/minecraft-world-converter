@@ -114,7 +114,7 @@ class LevelComparator(
         }
 
         logGenerator.generateSection(renameActions, "doc_rename_$what.txt")
-        logGenerator.generateSection(missingRenameActions, "doc_rename_${what}_missing.txt", true)
+        logGenerator.generateSection(missingRenameActions, null, true)
         println()
     }
 }

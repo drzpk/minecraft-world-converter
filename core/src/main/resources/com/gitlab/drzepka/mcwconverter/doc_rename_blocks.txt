@@ -1,9 +1,12 @@
-----------------------------
-|  Rename existing blocks  |
-----------------------------
+-------------------
+|  Rename blocks  |
+-------------------
 Actions below will update blocks in Forge registry in a world save. They should be used when block name has
 changed between Minecraft versions. This section is filled with actions changing names of blocks whose names'
 changed insignificantly and converter was able to detect them. Usually you don't have to modify this section manualy.
+However, if line is commented out, block couldn't be found in a newwer world save. That's most likely because their
+registry names have changed significantly. You have to manually uncomment edit each inactive entry in this section
+and type the correct new block name (on the right side).
 The action syntax is as follows:
 RenameBlock <old block name> <old block id> -> <new block name> <new block id>
 Block name must be a fully qualified Forge registry name: mod id and actual block name separated by a colon.
