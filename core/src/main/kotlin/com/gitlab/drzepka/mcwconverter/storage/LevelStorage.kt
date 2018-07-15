@@ -11,7 +11,7 @@ import java.io.FileInputStream
  */
 class LevelStorage(
         /** World save directory. */
-        levelDirectory: File,
+        private val levelDirectory: File,
         /** World name used when displaying errors. */
         levelCodeName: String
 ) {
@@ -41,5 +41,41 @@ class LevelStorage(
         // Check whether this level is modded
         if (!rootTag.hasTag("FML"))
             throw PrintableException("your $levelCodeName is not modded. Only modded worlds are supported")
+    }
+
+    /**
+     * Returns iterator with all [RegionStorage] instances associates with this world save.
+     */
+    fun regions(): Iterable<RegionStorage> {
+        return object : Iterable<RegionStorage> {
+            override fun iterator(): Iterator<RegionStorage> = RegionIterator()
+        }
+    }
+
+    /**
+     * Returns single region a given coordinates or `null` if no nuch region was found in this world save.
+     */
+    fun getRegion(regionX: Int, regionZ: Int): RegionStorage? {
+        val fileName = "region/r.$regionX.$regionZ.mca"
+        return try {
+            val region = RegionStorage(File(levelDirectory, fileName))
+            region
+        } catch (ignored: Exception) {
+            null
+        }
+    }
+
+    private inner class RegionIterator : Iterator<RegionStorage> {
+        private val regionFileIterator: Iterator<File>
+
+        init {
+            val regionDir = File(levelDirectory, "region")
+            val list = regionDir.listFiles { pathname -> pathname.isFile && pathname.name.endsWith("mca") }
+            regionFileIterator = list.iterator()
+        }
+
+        override fun hasNext(): Boolean = regionFileIterator.hasNext()
+
+        override fun next(): RegionStorage = RegionStorage(regionFileIterator.next())
     }
 }

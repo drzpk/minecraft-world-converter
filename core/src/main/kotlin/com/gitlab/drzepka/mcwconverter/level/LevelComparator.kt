@@ -4,13 +4,18 @@ import com.flowpowered.nbt.CompoundTag
 import com.gitlab.drzepka.mcwconverter.Logger
 import com.gitlab.drzepka.mcwconverter.PrintableException
 import com.gitlab.drzepka.mcwconverter.ResourceLocation
-import com.gitlab.drzepka.mcwconverter.action.BaseAction
 import com.gitlab.drzepka.mcwconverter.action.RenameBlockAction
 import com.gitlab.drzepka.mcwconverter.action.RenameItemAction
+import com.gitlab.drzepka.mcwconverter.storage.Chunk
 import com.gitlab.drzepka.mcwconverter.storage.LevelStorage
 import com.gitlab.drzepka.mcwconverter.storage.getTagValue
+import com.gitlab.drzepka.mcwconverter.util.CooldownLock
 import java.io.File
 import java.io.PrintWriter
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * This class loads two world and compares them, creating mapping that can be used to replace missing blocks or items.
@@ -23,8 +28,15 @@ class LevelComparator(
 ) {
     private val oldLevel: LevelStorage
     private val newLevel: LevelStorage
-
     private lateinit var logGenerator: LogGenerator
+    private var totalChunks = 0
+    private val progress = AtomicInteger(0)
+
+    private lateinit var renameBlockActions: ArrayList<RenameBlockAction>
+
+    private val threadPool = Executors.newFixedThreadPool(AVAILABLE_CPUS)
+    private val queue = ArrayBlockingQueue<Pair<Chunk, Chunk>>(AVAILABLE_CPUS * 2)
+    private val cooldownLock = CooldownLock(500)
 
     init {
         if (!oldWorldDirectory.isDirectory)
@@ -54,13 +66,39 @@ class LevelComparator(
         logGenerator = LogGenerator(output)
         compareRegistry("blocks", true)
         compareRegistry("items", false)
+
+        val oldRegions = oldLevel.regions()
+
+        // Compute amount of work to do
+        Logger.i("Gathering chunk info")
+        println("")
+        totalChunks = oldRegions.sumBy { it.countChunks() }
+
+        (0 until AVAILABLE_CPUS).forEach { threadPool.submit(ChunkComparator()) }
+
+        for (oldRegion in oldRegions) {
+            val newRegion = newLevel.getRegion(oldRegion.regionX, oldRegion.regionZ) ?: continue
+            val oldChunks = oldRegion.readChunks()
+            val newChunks = newRegion.readChunks()
+
+            for (i in 0 until 1024) {
+                if (oldChunks[i] == null || newChunks[i] == null)
+                    continue
+
+                queue.put(Pair(oldChunks[i]!!, newChunks[i]!!))
+            }
+        }
+
+        threadPool.shutdown()
+        threadPool.awaitTermination(1, TimeUnit.DAYS)
+        Logger.progress(totalChunks, totalChunks, "Processing chunks")
     }
 
     private fun compareRegistry(what: String, blocks: Boolean) {
         val oldList = oldLevel.rootTag.getTagValue<List<CompoundTag>>("FML Registries minecraft:$what ids")!!
         val newList = newLevel.rootTag.getTagValue<List<CompoundTag>>("FML Registries minecraft:$what ids")!!
-        val renameActions = ArrayList<BaseAction>()
-        val missingRenameActions = ArrayList<BaseAction>()
+        val renameActions = ArrayList<RenameBlockAction>()
+        val missingRenameActions = ArrayList<RenameBlockAction>()
 
         for ((progress, oldBlock) in oldList.withIndex()) {
             Logger.progress(progress + 1, oldList.size, "comparing registry $what")
@@ -113,8 +151,57 @@ class LevelComparator(
             }
         }
 
+        if (blocks)
+            renameBlockActions = renameActions
+
         logGenerator.generateSection(renameActions, "doc_rename_$what.txt")
         logGenerator.generateSection(missingRenameActions, null, true)
         println()
+    }
+
+    /**
+     * Compares chunk from old world save with chunk from new world save and finds differences between them.
+     */
+    private inner class ChunkComparator : Runnable {
+
+        override fun run() {
+            while (true) {
+                val pair = queue.poll(250, TimeUnit.MILLISECONDS) ?: if (threadPool.isShutdown)
+                    break
+                else
+                    continue
+
+                val oldChunk = pair.first
+                val newChunk = pair.second
+
+                // Iterate over every block in chunk
+                for (section in 0 until 16) {
+                    if (!oldChunk.hasSection(section) || !newChunk.hasSection(section))
+                        continue
+
+                    for (y in 0 until 16) {
+                        for (z in 0 until 16) {
+                            for (x in 0 until 16) {
+                                // TODO
+                            }
+                        }
+                    }
+                }
+
+                updateProgress()
+            }
+        }
+
+        private fun updateProgress() {
+            val currentProgress = progress.incrementAndGet()
+            if (cooldownLock.tryLock()) {
+                Logger.progress(currentProgress, totalChunks, "Processing chunks")
+                cooldownLock.unlock()
+            }
+        }
+    }
+
+    companion object {
+        private val AVAILABLE_CPUS by lazy { Runtime.getRuntime().availableProcessors() }
     }
 }
