@@ -6,6 +6,7 @@ import com.gitlab.drzepka.mcwconverter.PrintableException
 import com.gitlab.drzepka.mcwconverter.ResourceLocation
 import com.gitlab.drzepka.mcwconverter.action.RenameBlockAction
 import com.gitlab.drzepka.mcwconverter.action.RenameItemAction
+import com.gitlab.drzepka.mcwconverter.action.SwapBlockAction
 import com.gitlab.drzepka.mcwconverter.storage.Chunk
 import com.gitlab.drzepka.mcwconverter.storage.LevelStorage
 import com.gitlab.drzepka.mcwconverter.storage.getTagValue
@@ -13,6 +14,7 @@ import com.gitlab.drzepka.mcwconverter.util.CooldownLock
 import java.io.File
 import java.io.PrintWriter
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -71,10 +73,9 @@ class LevelComparator(
 
         // Compute amount of work to do
         Logger.i("Gathering chunk info")
-        println("")
         totalChunks = oldRegions.sumBy { it.countChunks() }
 
-        (0 until AVAILABLE_CPUS).forEach { threadPool.submit(ChunkComparator()) }
+        val threads = (0 until AVAILABLE_CPUS).map { threadPool.submit(ChunkComparator()) }
 
         for (oldRegion in oldRegions) {
             val newRegion = newLevel.getRegion(oldRegion.regionX, oldRegion.regionZ) ?: continue
@@ -91,7 +92,31 @@ class LevelComparator(
 
         threadPool.shutdown()
         threadPool.awaitTermination(1, TimeUnit.DAYS)
-        Logger.progress(totalChunks, totalChunks, "Processing chunks")
+        Logger.progress(totalChunks, totalChunks, "Processing chunks\n")
+
+        Logger.i("Processing results")
+        val uniqueSwapBlockActions = HashSet<SwapBlockAction>()
+        for (thread in threads) {
+            val result = thread.get()
+            uniqueSwapBlockActions.addAll(result.swapBlockActions)
+        }
+        val swapBlockActions = uniqueSwapBlockActions.sortedBy { it.sortableStr }.toMutableList()
+
+        // Prepare list for hint generation in SwapBlockActions
+        val blockRegistry = oldLevel.rootTag.getTagValue<List<CompoundTag>>("FML Registries minecraft:blocks ids")!!
+        val blockMappings = ArrayList<Pair<Int, String>>(blockRegistry.size)
+        for (entry in blockRegistry) {
+            val mapping = Pair(entry.getTagValue<Int>("V")!!, entry.getTagValue<String>("K")!!)
+            blockMappings.add(mapping)
+        }
+
+        // Remove all swap actions that would modify a minecraft block
+        val minecraftIds = blockMappings.filter { it.second.startsWith("minecraft:") }.map { it.first }
+        swapBlockActions.removeAll { minecraftIds.contains(it.oldId.toInt()) }
+
+        // Append section to a log file
+        swapBlockActions.forEach { it.blockMappings = blockMappings }
+        logGenerator.generateSection(swapBlockActions, "doc_swap_blocks.txt", true)
     }
 
     private fun compareRegistry(what: String, blocks: Boolean) {
@@ -162,9 +187,11 @@ class LevelComparator(
     /**
      * Compares chunk from old world save with chunk from new world save and finds differences between them.
      */
-    private inner class ChunkComparator : Runnable {
+    private inner class ChunkComparator : Callable<ChunkComparatorResult> {
 
-        override fun run() {
+        override fun call(): ChunkComparatorResult {
+            val swapBlockActions = ArrayList<SwapBlockAction>()
+
             while (true) {
                 val pair = queue.poll(250, TimeUnit.MILLISECONDS) ?: if (threadPool.isShutdown)
                     break
@@ -182,7 +209,14 @@ class LevelComparator(
                     for (y in 0 until 16) {
                         for (z in 0 until 16) {
                             for (x in 0 until 16) {
-                                // TODO
+                                val realY = section * 16 + y
+                                if (oldChunk.getBlockId(x, realY, z) != 0.toShort() && newChunk.getBlockId(x, realY, z) == 0.toShort()) {
+                                    // Block vanished in a new world save
+                                    val action = SwapBlockAction()
+                                    action.oldId = oldChunk.getBlockId(x, realY, z)
+                                    action.oldMeta = oldChunk.getBlockMeta(x, realY, z)
+                                    swapBlockActions.add(action)
+                                }
                             }
                         }
                     }
@@ -190,6 +224,8 @@ class LevelComparator(
 
                 updateProgress()
             }
+
+            return ChunkComparatorResult(swapBlockActions)
         }
 
         private fun updateProgress() {
@@ -200,6 +236,8 @@ class LevelComparator(
             }
         }
     }
+
+    private data class ChunkComparatorResult(val swapBlockActions: List<SwapBlockAction>)
 
     companion object {
         private val AVAILABLE_CPUS by lazy { Runtime.getRuntime().availableProcessors() }

@@ -1,0 +1,13 @@
+--------------------------
+|  Swap blocks in world  |
+--------------------------
+This section contains blocks that existed in old world save but disappeared in a new one. That could happen if a block
+had changed completly, i.e. in old version block had an id and meta 1234:1, whereas in new version the same block
+has id and meta 222:9. The converter generates only an action template with given old id and meta. It's your
+responsibility to figure out what a block changed into. Note: swapping has a higher priority than renaming blocks
+(the RenameBlock action), so if your rename and swap actions target the same block, id will be replaced by the latter
+(but block registry name will be replaced normally by the RenameBlock action).
+The action syntax is as follows:
+SwapBlock oldid:oldmeta -> newid:newmeat (optional hint)
+Both id and meta must be provided on both sides. Hint in parentheses is generated for better readability and is ignored
+during world conversion.
