@@ -59,4 +59,13 @@ class ResourceLocation() {
     private fun updateFullName() {
         fullName = "$domain:$path"
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (other !is ResourceLocation)
+            return false
+
+        return other.fullName == fullName
+    }
+
+    override fun hashCode(): Int = fullName.hashCode()
 }

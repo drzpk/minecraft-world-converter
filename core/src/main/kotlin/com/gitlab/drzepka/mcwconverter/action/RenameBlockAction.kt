@@ -2,6 +2,7 @@ package com.gitlab.drzepka.mcwconverter.action
 
 import com.gitlab.drzepka.mcwconverter.PrintableException
 import com.gitlab.drzepka.mcwconverter.ResourceLocation
+import java.util.*
 
 /**
  * Action used to rename blocks in a Forge registry.
@@ -43,4 +44,13 @@ open class RenameBlockAction : BaseAction() {
         newName = ResourceLocation(parts[3])
         newId = parts[4].toIntOrNull() ?: 0
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (other !is RenameBlockAction)
+            return false
+
+        return oldName == other.oldName && oldId == other.oldId && newName == other.newName && newId == other.newId
+    }
+
+    override fun hashCode(): Int = Objects.hash(oldName, oldId, newName, newId)
 }

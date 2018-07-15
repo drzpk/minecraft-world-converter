@@ -22,4 +22,7 @@ abstract class BaseAction {
      * @throws [com.gitlab.drzepka.mcwconverter.PrintableException] when there is a parse error
      */
     abstract fun parse(source: String)
+
+    abstract override fun equals(other: Any?): Boolean
+    abstract override fun hashCode(): Int
 }
