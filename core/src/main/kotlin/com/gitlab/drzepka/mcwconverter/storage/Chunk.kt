@@ -48,7 +48,7 @@ class Chunk(val rootTag: CompoundTag, val chunkX: Int, val chunkZ: Int) {
                 val data = section.getTagValue<ByteArray>("Data")!!
 
                 for (i in 0 until 4096) {
-                    var id = blocks[i].toShort()
+                    var id = blocks[i].toShort() and 0xff
                     if (add != null)
                         id = (getNibble(add, i).shl(8).toShort() + id).toShort()
 
@@ -87,7 +87,7 @@ class Chunk(val rootTag: CompoundTag, val chunkX: Int, val chunkZ: Int) {
         if (array[section] == null)
             return 0
 
-        val pos = y * 256 + z * 16 + x
+        val pos = (y - section * 16) * 256 + z * 16 + x
         return array[section]?.get(pos) ?: 0
     }
 }
