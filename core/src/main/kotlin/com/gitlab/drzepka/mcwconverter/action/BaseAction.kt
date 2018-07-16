@@ -8,7 +8,7 @@ abstract class BaseAction {
     /** The name of this action. All lines (except comments) in analyze result log start with action name. */
     abstract val actionName: String
     /** Returns string that will be used to sort actions. (More efficient than the [toString] method) */
-    abstract val sortableStr: String
+    abstract var sortableStr: String
 
     /**
      * Returns string representation of this action. It will be later parsed by the [parse] method. Return action-specific

@@ -23,12 +23,8 @@ import java.util.*
 class SwapBlockAction : BaseAction() {
 
     override val actionName = "SwapBlock"
-    override val sortableStr = ""
-        get() {
-            if (field.isEmpty())
-                toString()
-            return field
-        }
+    override var sortableStr = ""
+        get() = if (field.isEmpty()) toString() else field
 
     /** Id of block in an old world save. */
     var oldId: Short = 0
@@ -65,6 +61,8 @@ class SwapBlockAction : BaseAction() {
             if (oldMapping != null)
                 str += " ($oldMapping -> " + (newMapping ?: "unknown") + ")"
         }
+
+        sortableStr = str
         return str
     }
 

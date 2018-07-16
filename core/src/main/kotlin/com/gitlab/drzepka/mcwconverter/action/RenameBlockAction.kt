@@ -20,7 +20,7 @@ import java.util.*
 open class RenameBlockAction : BaseAction() {
 
     override val actionName = "RenameBlock"
-    override val sortableStr: String
+    override var sortableStr = ""
         get() = oldName.fullName
 
     /** Old block name. */
