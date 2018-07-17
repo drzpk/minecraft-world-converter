@@ -5,11 +5,15 @@ import org.apache.commons.cli.*
 import java.io.File
 import java.io.FileOutputStream
 import java.io.PrintWriter
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.system.exitProcess
 
 class McWConverter {
 
     companion object {
+
+        /** Use this lock to gain exclusive access to [System.out] stream. */
+        val PRINT_LOCK = ReentrantLock()
 
         private const val VERSION = "1.0"
 

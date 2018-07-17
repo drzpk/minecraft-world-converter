@@ -1,5 +1,6 @@
 package com.gitlab.drzepka.mcwconverter.util
 
+import com.gitlab.drzepka.mcwconverter.McWConverter
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
@@ -11,35 +12,26 @@ import java.util.concurrent.locks.ReentrantLock
  */
 class CooldownLock(private val cooldown: Long) : ReentrantLock() {
 
+    private val reference = McWConverter.PRINT_LOCK
     private var lastReleased = 0L
 
     override fun lock() {
-        super.lock()
+        reference.lock()
         execCooldown()
     }
 
     override fun lockInterruptibly() {
-        super.lockInterruptibly()
+        reference.lockInterruptibly()
         execCooldown()
     }
 
-    override fun tryLock(): Boolean {
-        val result = super.tryLock()
-        if (result)
-            execCooldown()
-        return result
-    }
+    override fun tryLock(): Boolean = System.currentTimeMillis() > lastReleased + cooldown && reference.tryLock()
 
-    override fun tryLock(timeout: Long, unit: TimeUnit?): Boolean {
-        val result = super.tryLock(timeout, unit)
-        if (result)
-            execCooldown()
-        return result
-    }
+    override fun tryLock(timeout: Long, unit: TimeUnit?): Boolean = System.currentTimeMillis() > lastReleased + cooldown && reference.tryLock(timeout, unit)
 
     override fun unlock() {
         lastReleased = System.currentTimeMillis()
-        super.unlock()
+        reference.unlock()
     }
 
     private fun execCooldown() {

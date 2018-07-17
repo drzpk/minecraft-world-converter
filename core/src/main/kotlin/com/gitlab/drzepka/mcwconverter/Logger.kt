@@ -4,16 +4,16 @@ import java.util.*
 
 object Logger {
 
-    fun i(message: String) {
-        log("INFO", message)
+    fun i(message: String, thread: Boolean = false) {
+        log("INFO", message, null, thread)
     }
 
-    fun w(message: String) {
-        log("WARN", message)
+    fun w(message: String, thread: Boolean = false) {
+        log("WARN", message, null, thread)
     }
 
-    fun e(message: String) {
-        log("ERR", message)
+    fun e(message: String, exception: Throwable? = null, thread: Boolean = false) {
+        log("ERR", message, exception, thread)
     }
 
     /**
@@ -43,7 +43,16 @@ object Logger {
         }
     }
 
-    private fun log(prefix: String, message: String) {
-        println("[$prefix] $message")
+    private fun log(prefix: String, message: String, exception: Throwable?, thread: Boolean) {
+        synchronized(this.javaClass) {
+            if (thread)
+                McWConverter.PRINT_LOCK.lock()
+            println("[$prefix] $message")
+            exception?.printStackTrace()
+            if (thread) {
+                System.out.flush()
+                McWConverter.PRINT_LOCK.unlock()
+            }
+        }
     }
 }
