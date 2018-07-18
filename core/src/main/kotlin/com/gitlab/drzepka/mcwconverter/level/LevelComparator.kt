@@ -5,6 +5,7 @@ import com.gitlab.drzepka.mcwconverter.Logger
 import com.gitlab.drzepka.mcwconverter.PrintableException
 import com.gitlab.drzepka.mcwconverter.ResourceLocation
 import com.gitlab.drzepka.mcwconverter.action.RenameBlockAction
+import com.gitlab.drzepka.mcwconverter.action.RenameBlockEntityAction
 import com.gitlab.drzepka.mcwconverter.action.RenameItemAction
 import com.gitlab.drzepka.mcwconverter.action.SwapBlockAction
 import com.gitlab.drzepka.mcwconverter.storage.Chunk
@@ -13,11 +14,13 @@ import com.gitlab.drzepka.mcwconverter.storage.getTagValue
 import com.gitlab.drzepka.mcwconverter.util.CooldownLock
 import java.io.File
 import java.io.PrintWriter
+import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.collections.HashSet
 
 /**
  * This class loads two world and compares them, creating mapping that can be used to replace missing blocks or items.
@@ -95,12 +98,19 @@ class LevelComparator(
         Logger.progress(totalChunks, totalChunks, "Processing chunks\n")
 
         Logger.i("Processing results")
-        val uniqueSwapBlockActions = HashSet<SwapBlockAction>()
+        val swapBlockActions = HashSet<SwapBlockAction>()
+        val renameBlockEntityActions = HashSet<RenameBlockEntityAction>()
+        val missingRenameBlockEntityActions = HashSet<RenameBlockEntityAction>()
+
+        // Gather all results from threads
         for (thread in threads) {
             val result = thread.get()
-            uniqueSwapBlockActions.addAll(result.swapBlockActions)
+            if (result != null) {
+                swapBlockActions.addAll(result.swapBlockActions)
+                renameBlockEntityActions.addAll(result.renameBlockEntityActions)
+                missingRenameBlockEntityActions.addAll(result.missingRenameBlockEntityActions)
+            }
         }
-        val swapBlockActions = uniqueSwapBlockActions.sortedBy { it.sortableStr }.toMutableList()
 
         // Prepare list for hint generation in SwapBlockActions
         val blockRegistry = oldLevel.rootTag.getTagValue<List<CompoundTag>>("FML Registries minecraft:blocks ids")!!
@@ -114,9 +124,28 @@ class LevelComparator(
         val minecraftIds = blockMappings.filter { it.second.startsWith("minecraft:") }.map { it.first }
         swapBlockActions.removeAll { minecraftIds.contains(it.oldId.toInt()) }
 
-        // Append section to a log file
+        // Append the SwapBlock section to a log file
         swapBlockActions.forEach { it.blockMappings = blockMappings }
-        logGenerator.generateSection(swapBlockActions, "doc_swap_blocks.txt", true)
+        val mutableSwapBlockActions = swapBlockActions.toMutableList()
+        mutableSwapBlockActions.sortBy { it.sortableStr }
+        logGenerator.generateSection(swapBlockActions.toMutableList().sortedBy { it.sortableStr }, "doc_swap_blocks.txt", true)
+
+        // Make sure that block entity marked as missing wasn't found elsewhere in the new world save
+        val iterator = missingRenameBlockEntityActions.iterator()
+        while (iterator.hasNext()) {
+            val missingAction = iterator.next()
+            for (plainAction in renameBlockEntityActions) {
+                if (plainAction.oldName == missingAction.oldName) {
+                    // Action mapping was found elsewhere
+                    iterator.remove()
+                    break
+                }
+            }
+        }
+
+        // Append the RenameBlockEntity actions to a log file
+        logGenerator.generateSection(renameBlockEntityActions.toMutableList().sortedBy { it.sortableStr }, "doc_rename_block_entities.txt")
+        logGenerator.generateSection(missingRenameBlockEntityActions.toMutableList().sortedBy { it.sortableStr }, null, true)
     }
 
     private fun compareRegistry(what: String, blocks: Boolean) {
@@ -187,9 +216,22 @@ class LevelComparator(
     /**
      * Compares chunk from old world save with chunk from new world save and finds differences between them.
      */
-    private inner class ChunkComparator : Callable<ChunkComparatorResult> {
+    private inner class ChunkComparator : Callable<ChunkComparatorResult?> {
 
-        override fun call(): ChunkComparatorResult {
+        private val renameBlockEntityActions = HashSet<RenameBlockEntityAction>()
+        private val missingRenameBlockEntityActions = HashSet<RenameBlockEntityAction>()
+        private val processedBlockEntities = HashSet<String>()
+
+        override fun call(): ChunkComparatorResult? {
+            return try {
+                doWork()
+            } catch (exception: Throwable) {
+                Logger.e("Unhandled exception in chunk comparator!", exception, true)
+                null
+            }
+        }
+
+        private fun doWork(): ChunkComparatorResult {
             val swapBlockActions = ArrayList<SwapBlockAction>()
 
             while (true) {
@@ -222,10 +264,110 @@ class LevelComparator(
                     }
                 }
 
+                // Compare block entities
+                val oldBlockEntities = oldChunk.rootTag.getTagValue<List<CompoundTag>>("Level TileEntities")
+                val newBlockEntities = newChunk.rootTag.getTagValue<List<CompoundTag>>("Level TileEntities")
+                if (oldBlockEntities?.isNotEmpty() == true && newBlockEntities?.isNotEmpty() == true)
+                    compareBlockEntities(oldBlockEntities, newBlockEntities)
+
                 updateProgress()
             }
 
-            return ChunkComparatorResult(swapBlockActions)
+            return ChunkComparatorResult(
+                    swapBlockActions,
+                    renameBlockEntityActions,
+                    missingRenameBlockEntityActions)
+        }
+
+        private fun compareBlockEntities(oldTiles: List<CompoundTag>, newTiles: List<CompoundTag>) {
+            for (old in oldTiles) {
+                val oldNameList = getRealBlockEntityNames(old)
+                if (oldNameList.isEmpty())
+                    continue
+
+                // One block entity can hold several other entities (Forge multipart)
+                for ((oldNameStr, isOldMultipart) in oldNameList) {
+                    if (processedBlockEntities.contains(oldNameStr)) {
+                        // Block entity with this id was already processed and its mapping was found
+                        continue
+                    }
+
+                    val oldName by lazy { ResourceLocation(oldNameStr) }
+                    val oldX by lazy { old.getTagValue<Int>("x") }
+                    val oldY by lazy { old.getTagValue<Int>("y") }
+                    val oldZ by lazy { old.getTagValue<Int>("z") }
+
+                    var mappingFound = false
+                    for (new in newTiles) {
+                        val newNameList = getRealBlockEntityNames(new)
+                        if (newNameList.isEmpty())
+                            continue
+
+                        // One block entity can hold several other entities (Forge multipart)
+                        for ((newNameStr, isNewMutipart) in newNameList) {
+                            if (oldNameStr == newNameStr) {
+                                // New block entity matches the old one, nothing needs to be done
+                                continue
+                            }
+
+                            // Block entities don't match
+                            if (!oldName.isSimilarTo(newNameStr)
+                                    || oldX != new.getTagValue<Int>("x")
+                                    || oldY != new.getTagValue<Int>("y")
+                                    || oldZ != new.getTagValue<Int>("z"))
+                                continue
+
+                            // Found mapping old tile -> new tile
+                            mappingFound = true
+                            val action = RenameBlockEntityAction()
+                            action.oldName = oldName
+                            action.newName = ResourceLocation(newNameStr)
+                            action.isOldMultipart = isOldMultipart
+                            action.isNewMultipart = isNewMutipart
+                            renameBlockEntityActions.add(action)
+                            processedBlockEntities.add(oldNameStr)
+                            break
+                        }
+
+                        if (mappingFound)
+                            break
+                    }
+
+                    if (!mappingFound) {
+                        // Block entity in new world save that is similar to the one in old world save wasn't found
+                        val action = RenameBlockEntityAction()
+                        action.oldName = oldName
+                        action.isOldMultipart = isOldMultipart
+                        missingRenameBlockEntityActions.add(action)
+                    }
+                }
+            }
+        }
+
+        /**
+         * Returns block entity names, taking into account Forge multiparts. Returns list of pairs: first - its name.
+         * second - whther block entity uses Forge multipart.
+         */
+        private fun getRealBlockEntityNames(tag: CompoundTag): List<Pair<String, Boolean>> {
+            val list = ArrayList<Pair<String, Boolean>>()
+            val tmpName = tag.getTagValue<String>("id") ?: return list
+
+            if (tmpName == "mcmultipart:multipart.ticking") {
+                val tagList = tag.getTagValue<List<CompoundTag>>("partList") ?: return list
+                for (entry in tagList) {
+                    val id = entry.getTagValue<String>("__partType") ?: continue
+                    list.add(Pair(id, true))
+                }
+            } else if (tmpName == "savedMultipart") {
+                val tagList = tag.getTagValue<List<CompoundTag>>("parts") ?: return list
+                for (entry in tagList) {
+                    val id = entry.getTagValue<String>("id") ?: continue
+                    list.add(Pair(id, true))
+                }
+            } else
+                list.add(Pair(tmpName, false))
+
+            return list
         }
 
         private fun updateProgress() {
@@ -237,7 +379,11 @@ class LevelComparator(
         }
     }
 
-    private data class ChunkComparatorResult(val swapBlockActions: List<SwapBlockAction>)
+    private data class ChunkComparatorResult(
+            val swapBlockActions: List<SwapBlockAction>,
+            val renameBlockEntityActions: HashSet<RenameBlockEntityAction>,
+            val missingRenameBlockEntityActions: HashSet<RenameBlockEntityAction>
+    )
 
     companion object {
         private val AVAILABLE_CPUS by lazy { Runtime.getRuntime().availableProcessors() }

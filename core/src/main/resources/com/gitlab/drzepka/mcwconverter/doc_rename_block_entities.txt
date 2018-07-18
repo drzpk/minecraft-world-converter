@@ -1,0 +1,11 @@
+---------------------------
+|  Rename block entities  |
+---------------------------
+Actions below will rename block entities. Some of them aren't fully complete. That's because the converter was unable
+to find their counterparts in new world save and you have to do it manually.
+The action syntax is as follows:
+RenameBlockEntity <old block entity name> -> <new block entity name>
+RenameBlockEntity [multipart] <old block entity name> -> <new block entity name>
+RenameBlockEntity [multipart] <old block entity name> -> [multipart] <new block entity name>
+The optional 'multipart' prefix means that a block entity uses Forge multipart. Note that you can convert multipart
+block entity to an ordinary block entity, not the other way around.
