@@ -29,7 +29,9 @@ class LevelComparator(
         /** Directory of old world save from which conversion will be performed. */
         oldWorldDirectory: File,
         /** Directory of new world save that needs to be converted. */
-        newWorldDirectory: File
+        newWorldDirectory: File,
+        /** Whether the strict comparison mode should be enabled. */
+        private val strictMode: Boolean = false
 ) {
     private val oldLevel: LevelStorage
     private val newLevel: LevelStorage
@@ -60,6 +62,12 @@ class LevelComparator(
 
         if (oldLevel.seed != newLevel.seed)
             throw PrintableException("given worlds have different seeds")
+
+        if (strictMode) {
+            Logger.w("Strict mode is enabled. Blocks' counterparts from new world save are expected to be " +
+                    "in the same locations as the original ones.")
+            Logger.w("This may generate a lot of redundant and potentially dangerous actions. Use with caution!")
+        }
     }
 
     /**
@@ -252,7 +260,15 @@ class LevelComparator(
                         for (z in 0 until 16) {
                             for (x in 0 until 16) {
                                 val realY = section * 16 + y
-                                if (oldChunk.getBlockId(x, realY, z) != 0.toShort() && newChunk.getBlockId(x, realY, z) == 0.toShort()) {
+                                val flag = if (!strictMode)
+                                    oldChunk.getBlockId(x, realY, z) != 0.toShort() && newChunk.getBlockId(x, realY, z) == 0.toShort()
+                                else {
+                                    val oldId = oldChunk.getBlockId(x, realY, z)
+                                    val newId = oldChunk.getBlockId(x, realY, z)
+                                    oldId != 0.toShort() && newId != 0.toShort() && oldId != newId
+                                }
+
+                                if (flag) {
                                     // Block vanished in a new world save
                                     val action = SwapBlockAction()
                                     action.oldId = oldChunk.getBlockId(x, realY, z)
@@ -305,13 +321,17 @@ class LevelComparator(
 
                         // One block entity can hold several other entities (Forge multipart)
                         for ((newNameStr, isNewMutipart) in newNameList) {
+                            // When strict comparison mode is enabled, only block entity coordinates are checked
+                            // and names are simply ignored. That's because block entities are expected to be in
+                            // the same position as they were in old world save.
+
                             if (oldNameStr == newNameStr) {
                                 // New block entity matches the old one, nothing needs to be done
                                 continue
                             }
 
                             // Block entities don't match
-                            if (!oldName.isSimilarTo(newNameStr)
+                            if ((!oldName.isSimilarTo(newNameStr) && !strictMode)
                                     || oldX != new.getTagValue<Int>("x")
                                     || oldY != new.getTagValue<Int>("y")
                                     || oldZ != new.getTagValue<Int>("z"))

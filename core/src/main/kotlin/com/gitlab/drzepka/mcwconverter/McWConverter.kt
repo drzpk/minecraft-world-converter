@@ -29,6 +29,8 @@ class McWConverter {
 
             options.addOption("o", "output", true,
                     "file name to which analyze output will be saved (a)")
+            options.addOption("s", "strict", false,
+                    "enables strict comparison (a)")
             options.addOption("i", "input", true,
                     "file name of the analyze output that will be used for conversion {c)")
 
@@ -109,7 +111,7 @@ class McWConverter {
                 // All file checkings are done elsewhere
                 val oldDir = File(cmd.args[0])
                 val newDir = File(cmd.args[1])
-                compareWorlds(oldDir, newDir, output)
+                compareWorlds(oldDir, newDir, output, cmd.hasOption("s"))
                 output.close()
             } else {
                 // Convert given world
@@ -122,8 +124,8 @@ class McWConverter {
             }
         }
 
-        private fun compareWorlds(oldSaveDir: File, newSaveDir: File, output: PrintWriter) {
-            val comparator = LevelComparator(oldSaveDir, newSaveDir)
+        private fun compareWorlds(oldSaveDir: File, newSaveDir: File, output: PrintWriter, strictMode: Boolean) {
+            val comparator = LevelComparator(oldSaveDir, newSaveDir, strictMode)
             comparator.compare(output)
         }
 
