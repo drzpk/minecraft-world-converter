@@ -13,4 +13,10 @@ package com.gitlab.drzepka.mcwconverter.action
  */
 class RenameItemAction : RenameBlockAction() {
     override val actionName = "RenameItem"
+
+    override fun parse(source: String): BaseAction {
+        return super.parse(source) as RenameItemAction
+    }
+
+    override fun getObject(): RenameBlockAction = RenameItemAction()
 }

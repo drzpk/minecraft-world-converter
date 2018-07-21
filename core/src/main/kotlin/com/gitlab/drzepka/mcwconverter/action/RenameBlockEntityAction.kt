@@ -43,19 +43,23 @@ class RenameBlockEntityAction : BaseAction() {
         return sortableStr
     }
 
-    override fun parse(source: String) {
-        val parts = source.split("->")
+    override fun parse(source: String): BaseAction {
+        val parts = source.split("->").map { it.trim() }
+        val action = RenameBlockEntityAction()
+
         try {
-            isOldMultipart = parts[0].contains("multipart", true)
-            oldName = ResourceLocation(if (isOldMultipart) parts[0].trim().split(' ')[1] else parts[0])
-            isNewMultipart = parts[1].contains("multipart", true)
-            newName = ResourceLocation(if (isNewMultipart) parts[1].trim().split(' ')[1] else parts[1])
+            action.isOldMultipart = parts[0].contains("multipart", true)
+            action.oldName = ResourceLocation(if (isOldMultipart) parts[0].trim().split(' ')[1] else parts[0])
+            action.isNewMultipart = parts[1].contains("multipart", true)
+            action.newName = ResourceLocation(if (isNewMultipart) parts[1].trim().split(' ')[1] else parts[1])
         } catch (ignored: Exception) {
             throw PrintableException("syntax error")
         }
 
-        if (!isOldMultipart && isNewMultipart)
+        if (!action.isOldMultipart && action.isNewMultipart)
             throw PrintableException("non-Forge multipart block entity cannot be converted to Forge multipart")
+
+        return action
     }
 
     override fun equals(other: Any?): Boolean {

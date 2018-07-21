@@ -34,15 +34,22 @@ open class RenameBlockAction : BaseAction() {
 
     override fun toString(): String = "$oldName $oldId -> $newName $newId"
 
-    override fun parse(source: String) {
+    override fun parse(source: String): BaseAction {
         val parts = source.trim().split(" ")
         if (parts.size != 5 || parts[2] != "->")
             throw PrintableException("wrong action format")
 
-        oldName = ResourceLocation(parts[0])
-        oldId = parts[1].toIntOrNull() ?: 0
-        newName = ResourceLocation(parts[3])
-        newId = parts[4].toIntOrNull() ?: 0
+        val action = getObject()
+        try {
+            action.oldName = ResourceLocation(parts[0])
+            action.oldId = parts[1].toIntOrNull() ?: 0
+            action.newName = ResourceLocation(parts[3])
+            action.newId = parts[4].toIntOrNull() ?: 0
+        } catch (exception: Throwable) {
+            throw PrintableException("syntax error")
+        }
+
+        return action
     }
 
     override fun equals(other: Any?): Boolean {
@@ -53,4 +60,6 @@ open class RenameBlockAction : BaseAction() {
     }
 
     override fun hashCode(): Int = Objects.hash(oldName, oldId, newName, newId)
+
+    protected open fun getObject(): RenameBlockAction = RenameBlockAction()
 }

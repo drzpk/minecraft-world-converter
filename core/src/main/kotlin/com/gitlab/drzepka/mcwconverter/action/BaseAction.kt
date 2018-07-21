@@ -17,11 +17,12 @@ abstract class BaseAction {
     abstract override fun toString(): String
 
     /**
-     * Parse this action.
+     * Parses this action.
      * @param source content serialized in the [toString] method.
+     * @return new action object
      * @throws [com.gitlab.drzepka.mcwconverter.PrintableException] when there is a parse error
      */
-    abstract fun parse(source: String)
+    abstract fun parse(source: String): BaseAction
 
     abstract override fun equals(other: Any?): Boolean
     abstract override fun hashCode(): Int

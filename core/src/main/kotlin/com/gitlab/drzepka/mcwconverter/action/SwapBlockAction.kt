@@ -66,28 +66,32 @@ class SwapBlockAction : BaseAction() {
         return str
     }
 
-    override fun parse(source: String) {
+    override fun parse(source: String): BaseAction {
         val parts = source.split(" ")
+        val action = SwapBlockAction()
+
         try {
             val oldData = parts[0].split(':')
-            oldId = oldData[0].toShort()
-            oldMeta = oldData[1].toShort()
+            action.oldId = oldData[0].toShort()
+            action.oldMeta = oldData[1].toShort()
 
             val newData = parts[2].split(':')
-            newId = newData[0].toShort()
-            newMeta = newData[1].toShort()
+            action.newId = newData[0].toShort()
+            action.newMeta = newData[1].toShort()
         } catch (ignored: Exception) {
             throw PrintableException("syntax error")
         }
 
-        if (oldId < 0 || oldId > 4095)
+        if (action.oldId < 0 || action.oldId > 4095)
             throw PrintableException("old block is should be in range [0, 4096)")
-        if (newId < 0 || newId > 4095)
+        if (action.newId < 0 || action.newId > 4095)
             throw PrintableException("new block is should be in range [0, 4096)")
-        if (oldMeta < 0 || oldMeta > 15)
+        if (action.oldMeta < 0 || action.oldMeta > 15)
             throw PrintableException("old block metadata should be in range [0, 16)")
-        if (newMeta < 0 || newMeta > 15)
+        if (action.newMeta < 0 || action.newMeta > 15)
             throw PrintableException("new block metadata should be in range [0, 16)")
+
+        return action
     }
 
     override fun equals(other: Any?): Boolean {
