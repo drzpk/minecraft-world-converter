@@ -1,0 +1,9 @@
+# ======================================
+# >>                                  <<
+# >>   Minecraft World Conveter Log   <<
+# >>                                  <<
+# ======================================
+Version: [version]
+Conversion: [old_version] -> [new_version]
+Seed: [seed]
+Log generated at: [date]

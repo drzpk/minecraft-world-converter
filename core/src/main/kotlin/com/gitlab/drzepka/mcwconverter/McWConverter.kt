@@ -14,8 +14,8 @@ class McWConverter {
 
         /** Use this lock to gain exclusive access to [System.out] stream. */
         val PRINT_LOCK = ReentrantLock()
-
-        private const val VERSION = "1.0"
+        /** Version of this converter. */
+        const val VERSION = "1.0"
 
         @JvmStatic
         fun main(args: Array<String>) {

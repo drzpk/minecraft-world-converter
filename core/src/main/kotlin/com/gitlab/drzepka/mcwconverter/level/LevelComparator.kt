@@ -76,7 +76,7 @@ class LevelComparator(
      * @param [output] writer analyze result will be written to
      */
     fun compare(output: PrintWriter) {
-        logGenerator = LogGenerator(output)
+        logGenerator = LogGenerator(output, oldLevel, newLevel)
         compareRegistry("blocks", true)
         compareRegistry("items", false)
 
